@@ -20,6 +20,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(2, status)
         self.assertEqual("file-not-found", payload["findings"][0]["rule"])
 
+    def test_config_file_is_applied(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "rules.json"
+            config.write_text(
+                '{"version":1,"settings":{"require_references":false},'
+                '"disabled_rules":["missing-heading-styles"]}',
+                encoding="utf-8",
+            )
+            missing = root / "missing.docx"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = main([str(missing), "--config", str(config), "--format", "json"])
+
+        self.assertEqual(2, status)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "settings": {
+    "max_paragraph_chars": 500,
+    "require_references": true
+  },
+  "disabled_rules": [],
+  "severity_overrides": {
+    "missing-references": "error"
+  },
+  "pattern_rules": [
+    {
+      "id": "informal-emphasis",
+      "pattern": "非常非常|超级",
+      "severity": "info",
+      "message": "Potentially informal emphasis found."
+    }
+  ]
+}

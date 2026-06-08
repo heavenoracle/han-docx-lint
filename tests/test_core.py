@@ -3,6 +3,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from han_docx_lint.config import ConfigError, config_from_dict
 from han_docx_lint.core import lint_docx
 
 
@@ -87,6 +88,62 @@ class LintDocxTests(unittest.TestCase):
     def test_missing_file_is_an_error(self):
         findings = lint_docx("/definitely/missing.docx")
         self.assertEqual("file-not-found", findings[0].rule)
+
+    def test_config_disables_rule_and_changes_severity(self):
+        config = config_from_dict(
+            {
+                "version": 1,
+                "disabled_rules": ["missing-heading-styles"],
+                "severity_overrides": {"missing-references": "error"},
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "configured.docx"
+            make_docx(path, paragraph("正文"))
+
+            findings = lint_docx(path, config=config)
+
+        self.assertEqual(["missing-references"], [item.rule for item in findings])
+        self.assertEqual("error", findings[0].severity)
+
+    def test_config_adds_pattern_rule(self):
+        config = config_from_dict(
+            {
+                "version": 1,
+                "settings": {"require_references": False},
+                "disabled_rules": ["missing-heading-styles"],
+                "pattern_rules": [
+                    {
+                        "id": "informal-wording",
+                        "pattern": "超级",
+                        "severity": "info",
+                        "message": "Informal wording found.",
+                    }
+                ],
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "custom.docx"
+            make_docx(path, paragraph("这是超级重要的结论。"))
+
+            findings = lint_docx(path, config=config)
+
+        self.assertEqual(["informal-wording"], [item.rule for item in findings])
+
+    def test_config_rejects_reserved_pattern_rule_id(self):
+        with self.assertRaises(ConfigError):
+            config_from_dict(
+                {
+                    "version": 1,
+                    "pattern_rules": [
+                        {
+                            "id": "cjk-spacing",
+                            "pattern": "x",
+                            "message": "reserved",
+                        }
+                    ],
+                }
+            )
 
 
 if __name__ == "__main__":

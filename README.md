@@ -24,8 +24,16 @@
 python -m pip install .
 han-docx-lint paper.docx
 han-docx-lint paper.docx --format json
+han-docx-lint paper.docx --config rules.json
 han-docx-lint paper.docx --max-paragraph-chars 800 --allow-no-references
 ```
+
+规则配置采用版本化 JSON，可关闭内置规则、调整严重级别并定义可审计的正则文本规则。
+可直接使用配套规则库：[han-docx-rules](https://github.com/heavenoracle/han-docx-rules)。
+在 GitHub 仓库中自动检查文档可使用
+[han-docx-action](https://github.com/heavenoracle/han-docx-action)。
+最小配置示例见 [`examples/rules.json`](examples/rules.json)。
+架构与仓库职责见 [`docs/ecosystem.md`](docs/ecosystem.md)。
 
 退出码为 `0` 表示未发现错误级问题，`1` 表示发现错误，`2` 表示文件无法读取或参数错误。
 警告不会导致退出码为 `1`。
@@ -43,11 +51,20 @@ modifies the source file, and does not upload documents.
 python -m pip install .
 han-docx-lint paper.docx
 han-docx-lint paper.docx --format json
+han-docx-lint paper.docx --config rules.json
 ```
 
 The tool checks package integrity, placeholder text, repeated punctuation,
 spaces between CJK characters, long paragraphs, consecutive empty paragraphs,
 reference-section presence, and heading-style usage.
+
+Versioned JSON configurations can disable built-in checks, override severities,
+and add auditable regex-based text rules. See
+[han-docx-rules](https://github.com/heavenoracle/han-docx-rules) for profiles and
+[han-docx-action](https://github.com/heavenoracle/han-docx-action) for CI use.
+See [`examples/rules.json`](examples/rules.json) for the configuration format.
+See [`docs/ecosystem.md`](docs/ecosystem.md) for architecture and repository
+responsibilities.
 
 ## Development
 
@@ -63,4 +80,3 @@ positive and negative cases.
 ## License
 
 MIT
-

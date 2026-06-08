@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Iterable
 from xml.etree import ElementTree
 
+from .config import LintConfig
+
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 W = f"{{{WORD_NS}}}"
@@ -54,8 +56,7 @@ def _excerpt(text: str, limit: int = 80) -> str:
 def _content_findings(
     paragraphs: Iterable[Paragraph],
     *,
-    max_paragraph_chars: int,
-    require_references: bool,
+    config: LintConfig,
 ) -> list[Finding]:
     findings: list[Finding] = []
     items = list(paragraphs)
@@ -68,10 +69,11 @@ def _content_findings(
         if not text:
             empty_run += 1
             if empty_run == 3:
-                findings.append(
+                if config.enabled("consecutive-empty-paragraphs"):
+                    findings.append(
                     Finding(
                         "consecutive-empty-paragraphs",
-                        "warning",
+                        config.severity("consecutive-empty-paragraphs", "warning"),
                         "Three or more consecutive empty paragraphs found.",
                         paragraph.number,
                     )
@@ -113,35 +115,57 @@ def _content_findings(
             ),
         )
         for pattern, checked_text, rule, severity, message in checks:
-            if pattern.search(checked_text):
+            if config.enabled(rule) and pattern.search(checked_text):
                 findings.append(
-                    Finding(rule, severity, message, paragraph.number, _excerpt(text))
+                    Finding(
+                        rule,
+                        config.severity(rule, severity),
+                        message,
+                        paragraph.number,
+                        _excerpt(text),
+                    )
                 )
 
-        if len(text) > max_paragraph_chars:
+        if config.enabled("long-paragraph") and len(text) > config.max_paragraph_chars:
             findings.append(
                 Finding(
                     "long-paragraph",
-                    "warning",
-                    f"Paragraph exceeds {max_paragraph_chars} characters.",
+                    config.severity("long-paragraph", "warning"),
+                    f"Paragraph exceeds {config.max_paragraph_chars} characters.",
                     paragraph.number,
                     _excerpt(text),
                 )
             )
 
-    if require_references and not has_references:
+        for pattern_rule in config.pattern_rules:
+            if pattern_rule.pattern.search(text):
+                findings.append(
+                    Finding(
+                        pattern_rule.rule,
+                        pattern_rule.severity,
+                        pattern_rule.message,
+                        paragraph.number,
+                        _excerpt(text),
+                    )
+                )
+
+    if (
+        config.require_references
+        and config.enabled("missing-references")
+        and not has_references
+    ):
         findings.append(
             Finding(
                 "missing-references",
-                "warning",
+                config.severity("missing-references", "warning"),
                 "No standalone references-section heading was found.",
             )
         )
-    if items and not has_heading_style:
+    if items and config.enabled("missing-heading-styles") and not has_heading_style:
         findings.append(
             Finding(
                 "missing-heading-styles",
-                "warning",
+                config.severity("missing-heading-styles", "warning"),
                 "No paragraph using a Heading/标题 style was found.",
             )
         )
@@ -153,7 +177,12 @@ def lint_docx(
     *,
     max_paragraph_chars: int = 600,
     require_references: bool = True,
+    config: LintConfig | None = None,
 ) -> list[Finding]:
+    active_config = config or LintConfig(
+        max_paragraph_chars=max_paragraph_chars,
+        require_references=require_references,
+    )
     source = Path(path)
     if not source.is_file():
         return [Finding("file-not-found", "error", f"File not found: {source}")]
@@ -184,6 +213,5 @@ def lint_docx(
 
     return _content_findings(
         _paragraphs(root),
-        max_paragraph_chars=max_paragraph_chars,
-        require_references=require_references,
+        config=active_config,
     )

@@ -14,6 +14,8 @@ keywords = ["docx", "lint", "chinese", "academic-writing", "ooxml"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
+  "Environment :: MacOS X",
+  "Environment :: Win32 (MS Windows)",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -22,6 +24,9 @@ classifiers = [
 
 [project.scripts]
 han-docx-lint = "han_docx_lint.cli:main"
+
+[project.gui-scripts]
+han-docx-lint-gui = "han_docx_lint.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

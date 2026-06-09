@@ -16,6 +16,7 @@ READ_FAILURE_RULES = {
     "invalid-docx",
     "read-error",
     "invalid-document-xml",
+    "document-part-too-large",
 }
 
 
@@ -57,6 +58,8 @@ def _text_output(path: Path, findings: list[Finding]) -> str:
     lines = [f"{path}: {len(findings)} finding(s)"]
     for finding in findings:
         location = f" paragraph {finding.paragraph}" if finding.paragraph else ""
+        if finding.part:
+            location = f" {finding.part}{location}"
         lines.append(
             f"{finding.severity.upper()} [{finding.rule}]{location}: {finding.message}"
         )

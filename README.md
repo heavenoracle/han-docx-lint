@@ -10,9 +10,10 @@
 当前检查项：
 
 - 损坏或缺少关键内容的 DOCX 文件
+- 正文、表格、页眉、页脚、脚注、尾注和批注中的文本
 - 文档中遗留的 `TODO`、`TBD`、`待补充` 等占位文本
 - 连续重复标点，如 `！！`、`，，`
-- 中文字符之间多余的空格
+- 中文字符之间单个或连续多个 ASCII 空格
 - 过长段落
 - 连续空段落
 - 缺少参考文献章节
@@ -35,6 +36,12 @@ han-docx-lint paper.docx --max-paragraph-chars 800 --allow-no-references
 最小配置示例见 [`examples/rules.json`](examples/rules.json)。
 架构与仓库职责见 [`docs/ecosystem.md`](docs/ecosystem.md)。
 
+使用 `--config` 时，配置文件接管 `max_paragraph_chars` 和
+`require_references`；`--max-paragraph-chars` 与 `--allow-no-references`
+仅在没有提供配置文件时生效。配置文件应像代码一样经过审查，不应直接运行来自不可信
+Pull Request 的规则。为限制资源消耗，单个 OOXML 部件最大为 20 MiB，自定义正则仅扫描
+每段前 100,000 个字符。
+
 退出码为 `0` 表示未发现错误级问题，`1` 表示发现错误，`2` 表示文件无法读取或参数错误。
 警告不会导致退出码为 `1`。
 
@@ -55,8 +62,10 @@ han-docx-lint paper.docx --config rules.json
 ```
 
 The tool checks package integrity, placeholder text, repeated punctuation,
-spaces between CJK characters, long paragraphs, consecutive empty paragraphs,
-reference-section presence, and heading-style usage.
+single and multiple ASCII spaces between CJK characters, long paragraphs,
+consecutive empty paragraphs, reference-section presence, and heading-style
+usage. It checks paragraphs in the main document, tables, headers, footers,
+footnotes, endnotes, and comments, and reports the originating OOXML part.
 
 Versioned JSON configurations can disable built-in checks, override severities,
 and add auditable regex-based text rules. See
@@ -65,6 +74,12 @@ and add auditable regex-based text rules. See
 See [`examples/rules.json`](examples/rules.json) for the configuration format.
 See [`docs/ecosystem.md`](docs/ecosystem.md) for architecture and repository
 responsibilities.
+
+When `--config` is provided, the profile controls `max_paragraph_chars` and
+`require_references`; the corresponding CLI flags apply only without a profile.
+Review profiles like code before use. The engine limits each OOXML part to
+20 MiB and scans at most the first 100,000 characters of a paragraph with each
+custom regular expression.
 
 ## Development
 

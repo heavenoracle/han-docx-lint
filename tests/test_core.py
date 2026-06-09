@@ -19,9 +19,11 @@ def paragraph(text="", style=None):
     return f"<w:p>{properties}<w:r><w:t>{text}</w:t></w:r></w:p>"
 
 
-def make_docx(path, paragraphs):
+def make_docx(path, paragraphs, extra_parts=None):
     with zipfile.ZipFile(path, "w") as package:
         package.writestr("word/document.xml", DOCUMENT.format(paragraphs=paragraphs))
+        for name, content in (extra_parts or {}).items():
+            package.writestr(name, DOCUMENT.format(paragraphs=content))
 
 
 class LintDocxTests(unittest.TestCase):
@@ -84,6 +86,45 @@ class LintDocxTests(unittest.TestCase):
             rules = {finding.rule for finding in lint_docx(path)}
 
             self.assertNotIn("cjk-spacing", rules)
+
+    def test_reports_single_cjk_space_separately(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "single-space.docx"
+            make_docx(
+                path,
+                paragraph("中 文", "Heading1") + paragraph("参考文献"),
+            )
+
+            findings = lint_docx(path)
+
+        self.assertEqual(["cjk-single-space"], [item.rule for item in findings])
+
+    def test_checks_paragraphs_inside_tables(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "table.docx"
+            table = "<w:tbl><w:tr><w:tc>" + paragraph("待补充") + "</w:tc></w:tr></w:tbl>"
+            make_docx(path, paragraph("正文", "Heading1") + table + paragraph("参考文献"))
+
+            findings = lint_docx(path)
+
+        placeholder = next(item for item in findings if item.rule == "placeholder-text")
+        self.assertEqual("word/document.xml", placeholder.part)
+        self.assertEqual(2, placeholder.paragraph)
+
+    def test_checks_header_parts_and_reports_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "header.docx"
+            make_docx(
+                path,
+                paragraph("正文", "Heading1") + paragraph("参考文献"),
+                {"word/header1.xml": paragraph("TODO")},
+            )
+
+            findings = lint_docx(path)
+
+        placeholder = next(item for item in findings if item.rule == "placeholder-text")
+        self.assertEqual("word/header1.xml", placeholder.part)
+        self.assertEqual(1, placeholder.paragraph)
 
     def test_missing_file_is_an_error(self):
         findings = lint_docx("/definitely/missing.docx")

@@ -11,6 +11,7 @@ BUILTIN_RULES = {
     "placeholder-text",
     "repeated-punctuation",
     "cjk-spacing",
+    "cjk-single-space",
     "long-paragraph",
     "consecutive-empty-paragraphs",
     "missing-references",
@@ -29,6 +30,8 @@ class PatternRule:
     pattern: re.Pattern[str]
     severity: str
     message: str
+    rationale: str | None = None
+    false_positives: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,16 @@ def _pattern_rules(value: Any) -> tuple[PatternRule, ...]:
             pattern = re.compile(pattern_text, flags)
         except re.error as exc:
             raise ConfigError(f"invalid regex for {rule}: {exc}") from exc
+        rationale = rule_data.get("rationale")
+        if rationale is not None and not isinstance(rationale, str):
+            raise ConfigError(f"pattern_rules[{index}].rationale must be a string")
+        false_positives = rule_data.get("false_positives", [])
+        if not isinstance(false_positives, list) or not all(
+            isinstance(item, str) for item in false_positives
+        ):
+            raise ConfigError(
+                f"pattern_rules[{index}].false_positives must be an array of strings"
+            )
         result.append(
             PatternRule(
                 rule=rule,
@@ -101,6 +114,8 @@ def _pattern_rules(value: Any) -> tuple[PatternRule, ...]:
                 message=_string(
                     rule_data.get("message"), f"pattern_rules[{index}].message"
                 ),
+                rationale=rationale,
+                false_positives=tuple(false_positives),
             )
         )
     return tuple(result)
@@ -153,4 +168,3 @@ def load_config(path: str | Path) -> LintConfig:
     except json.JSONDecodeError as exc:
         raise ConfigError(f"invalid JSON config: {exc}") from exc
     return config_from_dict(_object(data, "config"))
-

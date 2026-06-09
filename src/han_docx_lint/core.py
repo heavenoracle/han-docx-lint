@@ -12,9 +12,12 @@ from .config import LintConfig
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 W = f"{{{WORD_NS}}}"
+MAX_XML_PART_BYTES = 20 * 1024 * 1024
+MAX_PATTERN_SCAN_CHARS = 100_000
 PLACEHOLDER_RE = re.compile(r"\b(?:TODO|TBD|FIXME)\b|待补充|待填写|此处填写", re.I)
 REPEATED_PUNCTUATION_RE = re.compile(r"([，。！？；：、,.!?;:])\1+")
 CJK_SPACE_RE = re.compile(r"(?<=[\u3400-\u9fff]) {2,}(?=[\u3400-\u9fff])")
+CJK_SINGLE_SPACE_RE = re.compile(r"(?<=[\u3400-\u9fff]) (?=[\u3400-\u9fff])")
 REFERENCE_RE = re.compile(r"^\s*(?:参考文献|引用文献|References)\s*[:：]?\s*$", re.I)
 SPACED_LABEL_RE = re.compile(r"(摘  要|关 键 词)")
 
@@ -24,6 +27,7 @@ class Finding:
     rule: str
     severity: str
     message: str
+    part: str | None = None
     paragraph: int | None = None
     excerpt: str | None = None
 
@@ -33,18 +37,19 @@ class Finding:
 
 @dataclass(frozen=True)
 class Paragraph:
+    part: str
     number: int
     text: str
     style: str | None
 
 
-def _paragraphs(root: ElementTree.Element) -> list[Paragraph]:
+def _paragraphs(root: ElementTree.Element, part: str) -> list[Paragraph]:
     result: list[Paragraph] = []
-    for number, node in enumerate(root.findall(f".//{W}body/{W}p"), start=1):
+    for number, node in enumerate(root.findall(f".//{W}p"), start=1):
         text = "".join(part.text or "" for part in node.findall(f".//{W}t"))
         style_node = node.find(f"./{W}pPr/{W}pStyle")
         style = style_node.get(f"{W}val") if style_node is not None else None
-        result.append(Paragraph(number=number, text=text, style=style))
+        result.append(Paragraph(part=part, number=number, text=text, style=style))
     return result
 
 
@@ -75,6 +80,7 @@ def _content_findings(
                         "consecutive-empty-paragraphs",
                         config.severity("consecutive-empty-paragraphs", "warning"),
                         "Three or more consecutive empty paragraphs found.",
+                        paragraph.part,
                         paragraph.number,
                     )
                 )
@@ -113,6 +119,13 @@ def _content_findings(
                 "warning",
                 "Multiple spaces found between Chinese characters.",
             ),
+            (
+                CJK_SINGLE_SPACE_RE,
+                spacing_text,
+                "cjk-single-space",
+                "warning",
+                "Single ASCII space found between Chinese characters.",
+            ),
         )
         for pattern, checked_text, rule, severity, message in checks:
             if config.enabled(rule) and pattern.search(checked_text):
@@ -121,6 +134,7 @@ def _content_findings(
                         rule,
                         config.severity(rule, severity),
                         message,
+                        paragraph.part,
                         paragraph.number,
                         _excerpt(text),
                     )
@@ -132,18 +146,20 @@ def _content_findings(
                     "long-paragraph",
                     config.severity("long-paragraph", "warning"),
                     f"Paragraph exceeds {config.max_paragraph_chars} characters.",
+                    paragraph.part,
                     paragraph.number,
                     _excerpt(text),
                 )
             )
 
         for pattern_rule in config.pattern_rules:
-            if pattern_rule.pattern.search(text):
+            if pattern_rule.pattern.search(text[:MAX_PATTERN_SCAN_CHARS]):
                 findings.append(
                     Finding(
                         pattern_rule.rule,
                         pattern_rule.severity,
                         pattern_rule.message,
+                        paragraph.part,
                         paragraph.number,
                         _excerpt(text),
                     )
@@ -192,7 +208,7 @@ def lint_docx(
     try:
         with zipfile.ZipFile(source) as package:
             try:
-                document_xml = package.read("word/document.xml")
+                package.getinfo("word/document.xml")
             except KeyError:
                 return [
                     Finding(
@@ -201,17 +217,46 @@ def lint_docx(
                         "DOCX package does not contain word/document.xml.",
                     )
                 ]
+            part_infos = [
+                info
+                for info in package.infolist()
+                if info.filename == "word/document.xml"
+                or re.fullmatch(
+                    r"word/(?:header\d+|footer\d+|footnotes|endnotes|comments)\.xml",
+                    info.filename,
+                )
+            ]
+            oversized = next(
+                (info for info in part_infos if info.file_size > MAX_XML_PART_BYTES), None
+            )
+            if oversized is not None:
+                return [
+                    Finding(
+                        "document-part-too-large",
+                        "error",
+                        f"OOXML part exceeds {MAX_XML_PART_BYTES} bytes: {oversized.filename}",
+                        oversized.filename,
+                    )
+                ]
+            xml_parts = [(info.filename, package.read(info)) for info in part_infos]
     except zipfile.BadZipFile:
         return [Finding("invalid-docx", "error", "File is not a valid DOCX/ZIP package.")]
     except OSError as exc:
         return [Finding("read-error", "error", f"Unable to read file: {exc}")]
 
-    try:
-        root = ElementTree.fromstring(document_xml)
-    except ElementTree.ParseError:
-        return [Finding("invalid-document-xml", "error", "word/document.xml is invalid.")]
+    paragraphs: list[Paragraph] = []
+    for part, xml in xml_parts:
+        try:
+            root = ElementTree.fromstring(xml)
+        except ElementTree.ParseError:
+            return [
+                Finding(
+                    "invalid-document-xml",
+                    "error",
+                    f"OOXML part is invalid: {part}",
+                    part,
+                )
+            ]
+        paragraphs.extend(_paragraphs(root, part))
 
-    return _content_findings(
-        _paragraphs(root),
-        config=active_config,
-    )
+    return _content_findings(paragraphs, config=active_config)

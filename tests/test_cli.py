@@ -36,6 +36,14 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(2, status)
 
+    def test_text_output_includes_part_location(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(["missing.docx"])
+
+        self.assertEqual(2, status)
+        self.assertIn("file-not-found", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

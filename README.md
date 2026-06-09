@@ -29,6 +29,31 @@ han-docx-lint paper.docx --config rules.json
 han-docx-lint paper.docx --max-paragraph-chars 800 --allow-no-references
 ```
 
+### 桌面 GUI、Windows exe 与 macOS app
+
+如果不想使用命令行，可以使用桌面 GUI：
+
+```bash
+python -m pip install .
+han-docx-lint-gui
+```
+
+GUI 支持选择 `.docx` 文件、选择可选的 JSON 规则配置、运行检查、复制结果，并导出 JSON 报告。
+
+从 release 构建时，GitHub Actions 会生成两个压缩包：
+
+- `han-docx-lint-gui-windows.zip`：包含 `han-docx-lint-gui.exe`
+- `han-docx-lint-gui-macos.zip`：包含 `HanDocxLint.app`
+
+本地打包桌面程序：
+
+```bash
+python -m pip install . pyinstaller
+python scripts/build_desktop.py
+```
+
+Windows 构建产物位于 `dist/han-docx-lint-gui.exe`；macOS 构建产物位于 `dist/HanDocxLint.app`。
+
 规则配置采用版本化 JSON，可关闭内置规则、调整严重级别并定义可审计的正则文本规则。
 可直接使用配套规则库：[han-docx-rules](https://github.com/heavenoracle/han-docx-rules)。
 在 GitHub 仓库中自动检查文档可使用
@@ -59,6 +84,29 @@ python -m pip install .
 han-docx-lint paper.docx
 han-docx-lint paper.docx --format json
 han-docx-lint paper.docx --config rules.json
+```
+
+### Desktop GUI, Windows exe, and macOS app
+
+A desktop GUI is available for non-CLI use:
+
+```bash
+python -m pip install .
+han-docx-lint-gui
+```
+
+The GUI lets users select a `.docx` file, optionally select a JSON rules profile, run checks, copy results, and export a JSON report.
+
+Release builds generate:
+
+- `han-docx-lint-gui-windows.zip`, containing `han-docx-lint-gui.exe`
+- `han-docx-lint-gui-macos.zip`, containing `HanDocxLint.app`
+
+To build locally:
+
+```bash
+python -m pip install . pyinstaller
+python scripts/build_desktop.py
 ```
 
 The tool checks package integrity, placeholder text, repeated punctuation,
